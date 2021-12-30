@@ -64,6 +64,10 @@ pub fn main() -> std::io::Result<()> {
     );
     opts.optflag("L", "enable-tasklists", "enable GitHub-style task lists");
     opts.optflag("P", "enable-smart-punctuation", "enable smart punctuation");
+    #[cfg(feature = "math")]
+    {
+        opts.optflag("M", "enable-formulae", "enable mathematical formulae");
+    }
 
     let matches = match opts.parse(&args[1..]) {
         Ok(m) => m,
@@ -91,6 +95,10 @@ pub fn main() -> std::io::Result<()> {
     }
     if matches.opt_present("enable-smart-punctuation") {
         opts.insert(Options::ENABLE_SMART_PUNCTUATION);
+    }
+    #[cfg(feature = "math")]
+    if matches.opt_present("enable-formulae") {
+        opts.insert(Options::ENABLE_FORMULAE);
     }
 
     let mut input = String::new();

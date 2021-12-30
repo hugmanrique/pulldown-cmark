@@ -252,7 +252,7 @@ fn html_test_broken_callback() {
 // Tests for mathematical formulae.
 #[cfg(feature = "math")]
 mod math {
-    use pulldown_cmark::{html, Parser};
+    use pulldown_cmark::{html, Options, Parser};
 
     #[test]
     fn inline_test_1() {
@@ -261,7 +261,9 @@ mod math {
 "##;
 
         let mut s = String::new();
-        html::push_html(&mut s, Parser::new(&original));
+        let mut opts = Options::empty();
+        opts.insert(Options::ENABLE_FORMULAE);
+        html::push_html(&mut s, Parser::new_ext(&original, opts));
         assert_eq!(expected, s);
     }
 
@@ -272,7 +274,9 @@ mod math {
 "##;
 
         let mut s = String::new();
-        html::push_html(&mut s, Parser::new(&original));
+        let mut opts = Options::empty();
+        opts.insert(Options::ENABLE_FORMULAE);
+        html::push_html(&mut s, Parser::new_ext(&original, opts));
         assert_eq!(expected, s);
     }
 }

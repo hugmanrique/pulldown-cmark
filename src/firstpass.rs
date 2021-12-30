@@ -1525,7 +1525,7 @@ fn special_bytes(options: &Options) -> [bool; 256] {
         }
     }
     #[cfg(feature = "math")]
-    {
+    if options.contains(Options::ENABLE_FORMULAE) {
         bytes[b'$' as usize] = true;
     }
 
@@ -1761,7 +1761,7 @@ mod simd {
             }
         }
         #[cfg(feature = "math")]
-        {
+        if options.contains(Options::ENABLE_FORMULAE) {
             add_lookup_byte(&mut lookup, b'$');
         }
 
@@ -1909,6 +1909,7 @@ mod simd {
             opts.insert(Options::ENABLE_FOOTNOTES);
             opts.insert(Options::ENABLE_STRIKETHROUGH);
             opts.insert(Options::ENABLE_TASKLISTS);
+            opts.insert(Options::ENABLE_FORMULAE);
 
             let lut = create_lut(&opts);
             let mut indices = vec![];

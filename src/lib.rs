@@ -292,5 +292,6 @@ bitflags::bitflags! {
         /// with the content `text`, ID `id`, and classes `class1` and `class2`.
         /// Note that attributes (ID and classes) should be space-separeted.
         const ENABLE_HEADING_ATTRIBUTES = 1 << 6;
+        const ENABLE_FORMULAE = 1 << 7;
     }
 }
