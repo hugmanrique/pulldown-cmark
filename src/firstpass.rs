@@ -579,9 +579,9 @@ impl<'a, 'b> FirstPass<'a, 'b> {
                         }
                         LoopInstruction::ContinueAndSkip(count - 1)
                     }
-                    b'`' => {
+                    c @ b'`' | c @ b'$' => {
                         self.tree.append_text(begin_text, ix);
-                        let count = 1 + scan_ch_repeat(&bytes[(ix + 1)..], b'`');
+                        let count = 1 + scan_ch_repeat(&bytes[(ix + 1)..], c);
                         self.tree.append(Item {
                             start: ix,
                             end: ix + count,
@@ -1524,6 +1524,10 @@ fn special_bytes(options: &Options) -> [bool; 256] {
             bytes[byte as usize] = true;
         }
     }
+    #[cfg(feature = "math")]
+    {
+        bytes[b'$' as usize] = true;
+    }
 
     bytes
 }
@@ -1546,7 +1550,8 @@ type LookupTable = [bool; 256];
 
 /// This function walks the byte slices from the given index and
 /// calls the callback function on all bytes (and their indices) that are in the following set:
-/// `` ` ``, `\`, `&`, `*`, `_`, `~`, `!`, `<`, `[`, `]`, `|`, `\r`, `\n`
+/// `` ` ``, `\`, `&`, `*`, `_`, `~`, `!`, `<`, `[`, `]`, `|`, `\r`, `\n`,
+/// `$` (if the `math` feature is enabled).
 /// It is guaranteed not call the callback on other bytes.
 /// Whenever `callback(ix, byte)` returns a `ContinueAndSkip(n)` value, the callback
 /// will not be called with an index that is less than `ix + n + 1`.
@@ -1755,6 +1760,10 @@ mod simd {
                 add_lookup_byte(&mut lookup, byte);
             }
         }
+        #[cfg(feature = "math")]
+        {
+            add_lookup_byte(&mut lookup, b'$');
+        }
 
         lookup
     }
@@ -1928,6 +1937,18 @@ mod simd {
         }
 
         #[test]
+        #[cfg(feature = "math")]
+        fn single_dollar() {
+            check_expected_indices("01$234$56abc".as_bytes(), &[2, 6], 0);
+        }
+
+        #[test]
+        #[cfg(not(feature = "math"))]
+        fn no_dollar_match() {
+            check_expected_indices("01$abc234$".as_bytes(), &[], 0);
+        }
+
+        #[test]
         fn long_match() {
             check_expected_indices("0123456789abcde~*bcd&f0".as_bytes(), &[15, 16, 20], 0);
         }
@@ -1940,7 +1961,21 @@ mod simd {
         #[test]
         fn exhaustive_search() {
             let chars = [
-                b'\n', b'\r', b'*', b'_', b'~', b'|', b'&', b'\\', b'[', b']', b'<', b'!', b'`',
+                b'\n',
+                b'\r',
+                b'*',
+                b'_',
+                b'~',
+                b'|',
+                b'&',
+                b'\\',
+                b'[',
+                b']',
+                b'<',
+                b'!',
+                b'`',
+                #[cfg(feature = "math")]
+                b'$',
             ];
 
             for &c in &chars {

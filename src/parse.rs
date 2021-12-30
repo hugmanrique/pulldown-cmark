@@ -73,7 +73,7 @@ pub(crate) enum ItemBody {
     Emphasis,
     Strong,
     Strikethrough,
-    Code(CowIndex),
+    Code(CowIndex, bool), // true for math formula
     Link(LinkIndex),
     Image(LinkIndex),
     FootnoteReference(CowIndex),
@@ -810,14 +810,16 @@ impl<'input, 'callback> Parser<'input, 'callback> {
         } else {
             self.text[span_start..span_end].into()
         };
+        let is_formula = bytes[self.tree[open].item.start] == b'$';
+        let body = ItemBody::Code(self.allocs.allocate_cow(cow), is_formula);
         if preceding_backslash {
             self.tree[open].item.body = ItemBody::Text;
             self.tree[open].item.end = self.tree[open].item.start + 1;
             self.tree[open].next = Some(close);
-            self.tree[close].item.body = ItemBody::Code(self.allocs.allocate_cow(cow));
+            self.tree[close].item.body = body;
             self.tree[close].item.start = self.tree[open].item.start + 1;
         } else {
-            self.tree[open].item.body = ItemBody::Code(self.allocs.allocate_cow(cow));
+            self.tree[open].item.body = body;
             self.tree[open].item.end = self.tree[close].item.end;
             self.tree[open].next = self.tree[close].next;
         }
@@ -1410,10 +1412,28 @@ fn item_to_tag<'a>(item: &Item, allocs: &Allocations<'a>) -> Tag<'a> {
     }
 }
 
+#[cfg(feature = "math")]
+fn formula_to_event<'a>(cow_ix: CowIndex, allocs: &Allocations<'a>) -> Option<Event<'a>> {
+    Some(Event::Formula(allocs[cow_ix].clone()))
+}
+
+#[cfg(not(feature = "math"))]
+fn formula_to_event<'a>(_cow_ix: CowIndex, _allocs: &Allocations<'a>) -> Option<Event<'a>> {
+    None
+}
+
 fn item_to_event<'a>(item: Item, text: &'a str, allocs: &Allocations<'a>) -> Event<'a> {
     let tag = match item.body {
         ItemBody::Text => return Event::Text(text[item.start..item.end].into()),
-        ItemBody::Code(cow_ix) => return Event::Code(allocs[cow_ix].clone()),
+        ItemBody::Code(cow_ix, math_formula) => {
+            if math_formula {
+                println!("cargo:warning=converting formula");
+                if let Some(event) = formula_to_event(cow_ix, allocs) {
+                    return event;
+                }
+            }
+            return Event::Code(allocs[cow_ix].clone());
+        }
         ItemBody::SynthesizeText(cow_ix) => return Event::Text(allocs[cow_ix].clone()),
         ItemBody::SynthesizeChar(c) => return Event::Text(c.into()),
         ItemBody::Html => return Event::Html(text[item.start..item.end].into()),
