@@ -103,11 +103,8 @@ where
                 }
                 #[cfg(feature = "math")]
                 Formula(text, display) => {
-                    // TODO Cache opts object
-                    let opts = katex::Opts::builder()
-                        .display_mode(display)
-                        .build()
-                        .unwrap();
+                    let mut opts = katex::Opts::default();
+                    opts.set_display_mode(display);
                     katex::render_with_opts(&text, &opts)
                         .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
                         .and_then(|html| self.write(&html))?;

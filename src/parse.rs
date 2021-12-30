@@ -1865,7 +1865,7 @@ mod test {
         let mut found = 0;
         for (ev, _range) in parser.into_offset_iter() {
             match ev {
-                Event::Formula(_idx, display) => {
+                Event::Formula(_, display) => {
                     assert!(!display);
                     found += 1;
                 }
@@ -1882,7 +1882,7 @@ mod test {
         let mut found = 0;
         for (ev, _range) in parser.into_offset_iter() {
             match ev {
-                Event::Formula(_idx, display) => {
+                Event::Formula(_, display) => {
                     assert!(display);
                     found += 1;
                 }
