@@ -108,9 +108,6 @@ pub enum Tag<'a> {
     BlockQuote,
     /// A code block.
     CodeBlock(CodeBlockKind<'a>),
-    /// A formula in display mode.
-    #[cfg(feature = "math")]
-    FormulaBlock,
 
     /// A list. If the list is ordered the field indicates the number of the first item.
     /// Contains only list items.
@@ -246,10 +243,10 @@ pub enum Event<'a> {
     /// An HTML node.
     #[cfg_attr(feature = "serde", serde(borrow))]
     Html(CowStr<'a>),
-    /// A mathematical formula node.
+    /// A mathematical formula node. Contains a true when it is set in display mode.
     #[cfg(feature = "math")]
     #[cfg_attr(feature = "serde", serde(borrow))]
-    Formula(CowStr<'a>),
+    Formula(CowStr<'a>, bool),
     /// A reference to a footnote with given label, which may or may not be defined
     /// by an event with a `Tag::FootnoteDefinition` tag. Definitions and references to them may
     /// occur in any order.

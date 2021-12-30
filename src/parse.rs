@@ -73,7 +73,8 @@ pub(crate) enum ItemBody {
     Emphasis,
     Strong,
     Strikethrough,
-    Code(CowIndex, bool), // true for math formula
+    Code(CowIndex),
+    Formula(CowIndex, bool), // display mode
     Link(LinkIndex),
     Image(LinkIndex),
     FootnoteReference(CowIndex),
@@ -285,7 +286,12 @@ impl<'input, 'callback> Parser<'input, 'callback> {
                         // we have previously scanned all codeblock delimiters,
                         // so we can reuse that work
                         if let Some(scan_ix) = code_delims.find(cur_ix, search_count) {
-                            self.make_code_span(cur_ix, scan_ix, preceded_by_backslash);
+                            self.make_code_span(
+                                cur_ix,
+                                scan_ix,
+                                search_count,
+                                preceded_by_backslash,
+                            );
                         } else {
                             self.tree[cur_ix].item.body = ItemBody::Text;
                         }
@@ -302,7 +308,12 @@ impl<'input, 'callback> Parser<'input, 'callback> {
                                 self.tree[scan_ix].item.body
                             {
                                 if search_count == delim_count {
-                                    self.make_code_span(cur_ix, scan_ix, preceded_by_backslash);
+                                    self.make_code_span(
+                                        cur_ix,
+                                        scan_ix,
+                                        delim_count,
+                                        preceded_by_backslash,
+                                    );
                                     code_delims.clear();
                                     break;
                                 } else {
@@ -742,7 +753,13 @@ impl<'input, 'callback> Parser<'input, 'callback> {
     /// Make a code span.
     ///
     /// Both `open` and `close` are matching MaybeCode items.
-    fn make_code_span(&mut self, open: TreeIndex, close: TreeIndex, preceding_backslash: bool) {
+    fn make_code_span(
+        &mut self,
+        open: TreeIndex,
+        close: TreeIndex,
+        delim_count: usize,
+        preceding_backslash: bool,
+    ) {
         let first_ix = open + 1;
         let last_ix = close - 1;
         let bytes = self.text.as_bytes();
@@ -811,7 +828,12 @@ impl<'input, 'callback> Parser<'input, 'callback> {
             self.text[span_start..span_end].into()
         };
         let is_formula = bytes[self.tree[open].item.start] == b'$';
-        let body = ItemBody::Code(self.allocs.allocate_cow(cow), is_formula);
+        let body = if is_formula {
+            let display_mode = delim_count > 1;
+            ItemBody::Formula(self.allocs.allocate_cow(cow), display_mode)
+        } else {
+            ItemBody::Code(self.allocs.allocate_cow(cow))
+        };
         if preceding_backslash {
             self.tree[open].item.body = ItemBody::Text;
             self.tree[open].item.end = self.tree[open].item.start + 1;
@@ -1412,27 +1434,13 @@ fn item_to_tag<'a>(item: &Item, allocs: &Allocations<'a>) -> Tag<'a> {
     }
 }
 
-#[cfg(feature = "math")]
-fn formula_to_event<'a>(cow_ix: CowIndex, allocs: &Allocations<'a>) -> Option<Event<'a>> {
-    Some(Event::Formula(allocs[cow_ix].clone()))
-}
-
-#[cfg(not(feature = "math"))]
-fn formula_to_event<'a>(_cow_ix: CowIndex, _allocs: &Allocations<'a>) -> Option<Event<'a>> {
-    None
-}
-
 fn item_to_event<'a>(item: Item, text: &'a str, allocs: &Allocations<'a>) -> Event<'a> {
     let tag = match item.body {
         ItemBody::Text => return Event::Text(text[item.start..item.end].into()),
-        ItemBody::Code(cow_ix, math_formula) => {
-            if math_formula {
-                println!("cargo:warning=converting formula");
-                if let Some(event) = formula_to_event(cow_ix, allocs) {
-                    return event;
-                }
-            }
-            return Event::Code(allocs[cow_ix].clone());
+        ItemBody::Code(cow_ix) => return Event::Code(allocs[cow_ix].clone()),
+        #[cfg(feature = "math")]
+        ItemBody::Formula(cow_ix, display) => {
+            return Event::Formula(allocs[cow_ix].clone(), display)
         }
         ItemBody::SynthesizeText(cow_ix) => return Event::Text(allocs[cow_ix].clone()),
         ItemBody::SynthesizeChar(c) => return Event::Text(c.into()),
@@ -1532,6 +1540,7 @@ mod test {
         opts.insert(Options::ENABLE_FOOTNOTES);
         opts.insert(Options::ENABLE_STRIKETHROUGH);
         opts.insert(Options::ENABLE_TASKLISTS);
+        opts.insert(Options::ENABLE_FORMULAE);
 
         Parser::new_ext(text, opts)
     }
@@ -1841,6 +1850,40 @@ mod test {
         for (ev, _range) in parser.into_offset_iter() {
             match ev {
                 Event::Start(Tag::CodeBlock(CodeBlockKind::Indented)) => {
+                    found += 1;
+                }
+                _ => {}
+            }
+        }
+        assert_eq!(found, 1);
+    }
+
+    #[test]
+    #[cfg(feature = "math")]
+    fn inline_formula() {
+        let parser = parser_with_extensions("hello $world$");
+        let mut found = 0;
+        for (ev, _range) in parser.into_offset_iter() {
+            match ev {
+                Event::Formula(_idx, display) => {
+                    assert!(!display);
+                    found += 1;
+                }
+                _ => {}
+            }
+        }
+        assert_eq!(found, 1);
+    }
+
+    #[test]
+    #[cfg(feature = "math")]
+    fn display_formula_start_inline() {
+        let parser = parser_with_extensions("hello $$\n1 + 1 = 2$$");
+        let mut found = 0;
+        for (ev, _range) in parser.into_offset_iter() {
+            match ev {
+                Event::Formula(_idx, display) => {
+                    assert!(display);
                     found += 1;
                 }
                 _ => {}

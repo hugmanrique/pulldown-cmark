@@ -47,8 +47,6 @@ struct HtmlWriter<'a, I, W> {
     table_alignments: Vec<Alignment>,
     table_cell_index: usize,
     numbers: HashMap<CowStr<'a>, usize>,
-    #[cfg(feature = "math")]
-    in_equation: bool,
 }
 
 impl<'a, I, W> HtmlWriter<'a, I, W>
@@ -65,8 +63,6 @@ where
             table_alignments: vec![],
             table_cell_index: 0,
             numbers: HashMap::new(),
-            #[cfg(feature = "math")]
-            in_equation: false,
         }
     }
 
@@ -106,12 +102,12 @@ where
                     self.write("</code>")?;
                 }
                 #[cfg(feature = "math")]
-                Formula(text) => {
-                    let opts = if self.in_equation {
-                        katex::Opts::builder().display_mode(true).build().unwrap()
-                    } else {
-                        katex::Opts::default()
-                    };
+                Formula(text, display) => {
+                    // TODO Cache opts object
+                    let opts = katex::Opts::builder()
+                        .display_mode(display)
+                        .build()
+                        .unwrap();
                     katex::render_with_opts(&text, &opts)
                         .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
                         .and_then(|html| self.write(&html))?;
@@ -241,14 +237,6 @@ where
                     CodeBlockKind::Indented => self.write("<pre><code>"),
                 }
             }
-            #[cfg(feature = "math")]
-            Tag::FormulaBlock => {
-                if !self.end_newline {
-                    self.write_newline()?;
-                }
-                self.in_equation = true;
-                Ok(())
-            }
             Tag::List(Some(1)) => {
                 if self.end_newline {
                     self.write("<ol>\n")
@@ -364,8 +352,6 @@ where
             Tag::CodeBlock(_) => {
                 self.write("</code></pre>\n")?;
             }
-            #[cfg(feature = "math")]
-            Tag::FormulaBlock => self.in_equation = false,
             Tag::List(Some(_)) => {
                 self.write("</ol>\n")?;
             }
@@ -412,7 +398,7 @@ where
                     self.end_newline = text.ends_with('\n');
                 }
                 #[cfg(feature = "math")]
-                Formula(text) => {
+                Formula(text, _) => {
                     escape_html(&mut self.writer, &text)?;
                     self.end_newline = text.ends_with('\n');
                 }
